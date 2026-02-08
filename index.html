@@ -1,0 +1,668 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Blood Sugar & Supplement Tracker</title>
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#8ab4f8">
+  <style>
+    :root{
+      --bg:#f6f8fb; --card:#ffffff; --border:#e6ebf2; --text:#111827; --muted:#6b7280;
+      --accent:#8ab4f8; --accent2:#eef4ff;
+      --green:#16a34a; --red:#dc2626;
+    }
+    *{box-sizing:border-box}
+    body{margin:0; padding:16px; font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial; background:var(--bg); color:var(--text);}
+    h1{margin:0 0 10px 0; font-size:20px}
+    .card{background:var(--card); border:1px solid var(--border); border-radius:14px; padding:12px; margin:10px 0;
+      box-shadow:0 6px 18px rgba(0,0,0,.04);}
+    .row{display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end}
+    .mini{flex:1; min-width:180px}
+    .label{display:block; font-size:13px; color:var(--muted); margin:6px 0 4px}
+    .input, textarea{width:100%; padding:10px; border:1px solid var(--border); border-radius:12px; background:#fbfdff; color:var(--text);}
+    textarea{min-height:72px; resize:vertical}
+    .btn{padding:10px 14px; border-radius:12px; border:1px solid var(--border); cursor:pointer; font-weight:800;}
+    .btn.primary{background:var(--accent); color:#0f172a}
+    .btn.secondary{background:var(--accent2); color:#0f172a}
+    .hint{font-size:12px; color:var(--muted); margin-top:6px}
+    .grid{display:grid; grid-template-columns:1fr; gap:10px}
+    @media(min-width:980px){ .grid{grid-template-columns:1fr 1fr} }
+    .section-title{font-size:14px; font-weight:900; margin-top:8px}
+    .checkgrid{display:grid; grid-template-columns:1fr 1fr; gap:6px 10px; margin-top:6px}
+    @media(min-width:720px){ .checkgrid{grid-template-columns:1fr 1fr 1fr} }
+    .chk{display:flex; align-items:center; gap:8px; font-size:13px; color:var(--text)}
+    .small{font-size:12px; color:var(--muted)}
+    hr{border:none; border-top:1px solid var(--border); margin:12px 0}
+    .date{font-weight:900}
+    input.ok{border-color:rgba(22,163,74,.55)}
+    input.bad{border-color:rgba(220,38,38,.55)}
+    .avg.ok{color:var(--green)}
+    .avg.bad{color:var(--red)}
+    .pill{display:inline-block; padding:2px 10px; border-radius:999px; font-size:12px; font-weight:900; background:var(--accent2);}
+      .dayBody{margin-top:8px}
+    .collapsed .dayBody{display:none}
+    .toggleBtn{padding:6px 10px; font-size:12px}
+</style>
+</head>
+<body>
+  <h1>Blood Sugar & Supplement Tracker</h1>
+
+  <div class="card">
+    <div class="row">
+      <div class="mini">
+        <label class="label">Start date</label>
+        <input id="start" class="input" type="date">
+      </div>
+      <div class="mini">
+        <label class="label">End date</label>
+        <input id="end" class="input" type="date">
+      </div>
+      <div class="mini" style="flex:0 0 auto; min-width:auto">
+        <button id="buildBtn" class="btn primary">Build days</button>
+      </div>
+      <div class="mini" style="flex:0 0 auto; min-width:auto">
+        <span id="rangePill" class="pill">–</span>
+      </div>
+    </div>
+
+    <div class="row" style="margin-top:10px">
+      <button id="exportBtn" class="btn secondary">Export CSV</button>
+      <button id="importBtn" class="btn secondary">Import CSV</button>
+      <input id="csvFile" type="file" accept=".csv,text/csv" style="display:none">
+      <button id="clearAllBtn" class="btn secondary">Clear ALL data</button>
+    </div>
+
+    <div class="row" style="margin-top:10px">
+      <div class="mini">
+        <label class="label">Custom vitamin label</label>
+        <input id="customVitLabel" class="input" type="text" placeholder="e.g., Vitamin B12">
+        <div class="hint">Adds an extra checkbox in the daily list.</div>
+      </div>
+      <div class="mini">
+        <label class="label">Weekly measurements display</label>
+        <label class="chk" style="margin-top:6px">
+          <input id="backfillWeekly" type="checkbox">
+          <span>Show weekly body measurements on every day (backfill mode)</span>
+        </label>
+        <div class="hint">When off, waist/weight/fat/BP/grip show on day 1 then every 7 days.</div>
+      </div>
+    </div>
+
+    <div class="hint">Units: blood sugar mmol/L • waist mm • weight/grip kg • BP mmHg. Dates shown/exported as dd/mm/yyyy.</div>
+  </div>
+
+  <div class="card" id="weeklyCard">
+    <div class="section-title">Targets (mmol/L)</div>
+    <div class="grid">
+      <div>
+        <label class="label">Fasting low</label><input id="t_fbs_low" class="input" inputmode="decimal">
+        <label class="label">Fasting high</label><input id="t_fbs_high" class="input" inputmode="decimal">
+      </div>
+      <div>
+        <label class="label">Pre-dinner low</label><input id="t_pre_low" class="input" inputmode="decimal">
+        <label class="label">Pre-dinner high</label><input id="t_pre_high" class="input" inputmode="decimal">
+      </div>
+      <div>
+        <label class="label">2h Post-dinner low</label><input id="t_post_low" class="input" inputmode="decimal">
+        <label class="label">2h Post-dinner high</label><input id="t_post_high" class="input" inputmode="decimal">
+      </div>
+    </div>
+    <hr>
+    <div class="section-title">Averages (selected date range)</div>
+    <div class="grid">
+      <div>
+        <div class="small">Fasting avg</div>
+        <div id="avg_fbs" class="avg" style="font-weight:900;font-size:18px">–</div>
+        <div id="avg_fbs_n" class="small"></div>
+      </div>
+      <div>
+        <div class="small">Pre-dinner avg</div>
+        <div id="avg_pre" class="avg" style="font-weight:900;font-size:18px">–</div>
+        <div id="avg_pre_n" class="small"></div>
+      </div>
+      <div>
+        <div class="small">2h Post-dinner avg</div>
+        <div id="avg_post" class="avg" style="font-weight:900;font-size:18px">–</div>
+        <div id="avg_post_n" class="small"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="days"></div>
+
+<script>
+(() => {
+  const STORE_KEY = "bs_fullrebuild_v9";
+  const TARGETS_KEY = STORE_KEY + "_targets";
+  const CUSTOM_VIT_KEY = STORE_KEY + "_customVitLabel";
+  const BACKFILL_KEY = STORE_KEY + "_backfillWeekly";
+  const COLLAPSE_KEY = STORE_KEY + "_collapsed";
+
+  const CHECKS = ["Berberine \u2013 Morning", "Vitamin D3", "K2", "NR", "Astaxanathan", "Metformin", "Berberine \u2013 Afternoon", "Vitamin C", "Multivitamin", "Sugar Support", "Omega 3", "Ubiquinol", "TMG", "NAC", "Magnesium", "Taurine", "Collagen", "Protein Powder 84g", "Cinnamon", "Apple Cider Vinegar", "Creatine 10g", "Probiotic", "Half hour treadmill", "Foot Excercise", "Shoulderr Excercise", "Weight Training", "Fasted", "Water Fasted"];
+  const GROUPS = [
+    { title: "Supplements", items: ["Berberine \u2013 Morning", "Vitamin D3", "K2", "NR", "Astaxanathan", "Metformin", "Berberine \u2013 Afternoon", "Vitamin C", "Multivitamin", "Sugar Support", "Omega 3", "Ubiquinol", "TMG", "NAC", "Magnesium", "Taurine", "Collagen", "Protein Powder 84g", "Cinnamon", "Apple Cider Vinegar", "Creatine 10g", "Probiotic"] },
+    { title: "Exercise", items: ["Half hour treadmill", "Foot Excercise", "Shoulderr Excercise", "Weight Training"] },
+    { title: "Fasting", items: ["Fasted", "Water Fasted"] },
+    { title: "Custom", items: ["__CUSTOM_VITAMIN__"] },
+  ];
+
+  const VALUE_FIELDS = [{"key": "fastingBloodSugar", "label": "Fasting Blood Sugar", "unit": "mmol/L", "freq": "daily"}, {"key": "preDinnerSugar", "label": "Pre Dinner Sugar", "unit": "mmol/L", "freq": "daily"}, {"key": "postDinner2h", "label": "2 Hr Post Dinner Sugar", "unit": "mmol/L", "freq": "daily"}, {"key": "waist", "label": "Waist size", "unit": "mm", "freq": "weekly"}, {"key": "weight", "label": "Weight", "unit": "kg", "freq": "weekly"}, {"key": "fat", "label": "Fat", "unit": "%", "freq": "weekly"}, {"key": "bpSys", "label": "BP Sys", "unit": "mmHg", "freq": "weekly"}, {"key": "bpDia", "label": "BP Dia", "unit": "mmHg", "freq": "weekly"}, {"key": "gripL", "label": "Grip L", "unit": "kg", "freq": "weekly"}, {"key": "gripR", "label": "Grip R", "unit": "kg", "freq": "weekly"}];
+  const MEALS_FIELDS = [["breakfast", "Breakfast"], ["lunch", "Lunch"], ["dinner", "Dinner"], ["snacks", "Snacks"], ["carbs", "Carbs (g)"], ["foodNotes", "Food notes"]];
+
+  const TARGET_DEFAULTS = {"fbs": {"low": 4.0, "high": 5.5}, "pre": {"low": 4.0, "high": 6.0}, "post": {"low": 4.0, "high": 7.8}};
+
+  const qs = (id) => document.getElementById(id);
+  const pad2 = (n) => String(n).padStart(2,'0');
+  const fmtISO = (d) => d.toISOString().slice(0,10);
+  const isoToAU = (iso) => {
+    const p = String(iso||'').split('-');
+    if (p.length !== 3) return iso || '';
+    const [y,m,d] = p;
+    return `${pad2(d)}/${pad2(m)}/${y}`;
+  };
+  const auToISO = (s) => {
+    const t = String(s||'').trim();
+    if (!t) return '';
+    if (/^\d{4}-\d{2}-\d{2}$/.test(t)) return t;
+    const m = t.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    if (m) return `${m[3]}-${pad2(m[2])}-${pad2(m[1])}`;
+    const m2 = t.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/);
+    if (m2) return `${m2[3]}-${pad2(m2[2])}-${pad2(m2[1])}`;
+    return t;
+  };
+
+  const numOrNull = (v) => {
+    const s = String(v ?? '').trim().replace(',', '.');
+    if (!s) return null;
+    const n = Number(s);
+    return Number.isFinite(n) ? n : null;
+  };
+
+  function parseCSV(text) {
+    const rows = [];
+    let i=0, field='', row=[], inQ=false;
+    while(i<text.length){
+      const c=text[i];
+      if(inQ){
+        if(c === '"'){
+          if(text[i+1] === '"'){ field+='"'; i+=2; continue; }
+          inQ=false; i++; continue;
+        }
+        field+=c; i++; continue;
+      } else {
+        if(c === '"'){ inQ=true; i++; continue; }
+        if(c === ','){ row.push(field); field=''; i++; continue; }
+        if(c === '\n'){ row.push(field); rows.push(row); row=[]; field=''; i++; continue; }
+        if(c === '\r'){ i++; continue; }
+        field+=c; i++; continue;
+      }
+    }
+    row.push(field); rows.push(row);
+    return rows.filter(r => r.some(x => String(x).trim() !== ''));
+  }
+
+  const escapeCSV = (v) => '"' + String(v ?? '').replace(/"/g,'""') + '"';
+
+  function dateRange(startISO, endISO) {
+    const out = [];
+    let d = new Date(startISO + 'T00:00:00');
+    const endD = new Date(endISO + 'T00:00:00');
+    while(d <= endD){
+      out.push(fmtISO(d));
+      d.setDate(d.getDate()+1);
+    }
+    return out;
+  }
+
+  function isWeeklyDay(dateISO, startISO){
+    try{
+      const d = new Date(dateISO+'T00:00:00');
+      const s = new Date(startISO+'T00:00:00');
+      const dd = Math.floor((d - s)/86400000);
+      return dd % 7 === 0;
+    }catch(e){ return true; }
+  }
+
+  function daysUntilNextWeekly(dateISO, startISO){
+    try{
+      const d = new Date(dateISO+'T00:00:00');
+      const s = new Date(startISO+'T00:00:00');
+      const dd = Math.floor((d - s)/86400000);
+      const mod = ((dd % 7) + 7) % 7;
+      return (7 - mod) % 7;
+    }catch(e){ return 0; }
+  }
+
+  function loadModel(){
+    try{
+      const raw = localStorage.getItem(STORE_KEY);
+      if(!raw) return { days: {} };
+      const m = JSON.parse(raw);
+      if(!m.days) m.days = {};
+      return m;
+    }catch(e){ return { days: {} }; }
+  }
+  let model = loadModel();
+  let collapsedMap = {};
+  try{ collapsedMap = JSON.parse(localStorage.getItem(COLLAPSE_KEY) || "{}"); }catch(e){ collapsedMap = {}; }
+  function saveCollapsed(){ try{ localStorage.setItem(COLLAPSE_KEY, JSON.stringify(collapsedMap)); }catch(e){} }
+
+  function saveModel(){ localStorage.setItem(STORE_KEY, JSON.stringify(model)); }
+
+  function ensureDay(ds){
+    if(!model.days[ds]) model.days[ds] = { values: {}, meals: {}, checks: {}, notes: "" };
+    const d = model.days[ds];
+    d.values = d.values || {};
+    d.meals = d.meals || {};
+    d.checks = d.checks || {};
+    if(typeof d.notes !== 'string') d.notes = "";
+    return d;
+  }
+
+  function loadTargets(){
+    try{
+      const raw = localStorage.getItem(TARGETS_KEY);
+      if(!raw) return JSON.parse(JSON.stringify(TARGET_DEFAULTS));
+      const t = JSON.parse(raw);
+      return Object.assign(JSON.parse(JSON.stringify(TARGET_DEFAULTS)), t);
+    }catch(e){ return JSON.parse(JSON.stringify(TARGET_DEFAULTS)); }
+  }
+  let targets = loadTargets();
+  function saveTargets(){ localStorage.setItem(TARGETS_KEY, JSON.stringify(targets)); }
+
+  function applyTargetsToInputs(){
+    document.querySelectorAll('input[data-measure]').forEach(inp => {
+      const k = inp.getAttribute('data-measure');
+      let band = null;
+      if(k === "fastingBloodSugar") band = targets.fbs;
+      if(k === "preDinnerSugar") band = targets.pre;
+      if(k === "postDinner2h") band = targets.post;
+      if(!band) return;
+      const n = numOrNull(inp.value);
+      inp.classList.remove('ok','bad');
+      if(n === null) return;
+      if(n < band.low || n > band.high) inp.classList.add('bad'); else inp.classList.add('ok');
+    });
+  }
+
+  function updateAverages(startISO, endISO){
+    const dates = (startISO && endISO) ? dateRange(startISO,endISO) : Object.keys(model.days||{});
+    const vals = { fbs:[], pre:[], post:[] };
+    dates.forEach(ds => {
+      const day = model.days[ds];
+      if(!day || !day.values) return;
+      const a = numOrNull(day.values.fastingBloodSugar);
+      const b = numOrNull(day.values.preDinnerSugar);
+      const c = numOrNull(day.values.postDinner2h);
+      if(a!==null) vals.fbs.push(a);
+      if(b!==null) vals.pre.push(b);
+      if(c!==null) vals.post.push(c);
+    });
+    const avg = (arr) => arr.length ? (arr.reduce((x,y)=>x+y,0)/arr.length) : null;
+    const to2 = (n) => n===null ? "–" : n.toFixed(2);
+    const cls = (n, band) => (n===null) ? "" : ((n < band.low || n > band.high) ? "bad" : "ok");
+
+    const set = (id, n, band, nId, cnt) => {
+      const el = qs(id); const eln = qs(nId);
+      el.textContent = to2(n);
+      el.classList.remove('ok','bad');
+      const c = cls(n, band);
+      if(c) el.classList.add(c);
+      eln.textContent = cnt ? `${cnt} value(s)` : "";
+    };
+    set("avg_fbs", avg(vals.fbs), targets.fbs, "avg_fbs_n", vals.fbs.length);
+    set("avg_pre", avg(vals.pre), targets.pre, "avg_pre_n", vals.pre.length);
+    set("avg_post", avg(vals.post), targets.post, "avg_post_n", vals.post.length);
+  }
+
+  let customVitLabel = (localStorage.getItem(CUSTOM_VIT_KEY) || "").trim();
+  let backfillWeekly = (localStorage.getItem(BACKFILL_KEY) === "1");
+  if(localStorage.getItem(BACKFILL_KEY) === null) { try{ localStorage.setItem(BACKFILL_KEY, "0"); }catch(e){} }
+
+
+  function shouldShowCustomVitamin(){ return !!customVitLabel; }
+  function displayCheckLabel(lbl){
+    if(lbl === "__CUSTOM_VITAMIN__") return customVitLabel ? customVitLabel : "Custom vitamin";
+    return lbl;
+  }
+
+  function makeValueInput(field, value, ds){
+    const key = field.key;
+    const label = field.label;
+    const unit = field.unit;
+    const val = value ?? "";
+    const dataMeasure = (key === "fastingBloodSugar" || key === "preDinnerSugar" || key === "postDinner2h") ? `data-measure="${key}"` : "";
+    return `
+      <div>
+        <label class="label">${label} <span class="small">(${unit})</span></label>
+        <input class="input" ${dataMeasure} inputmode="decimal" value="${String(val).replace(/"/g,'&quot;')}"
+          oninput="window.__setVal('${ds}','${key}', this.value); window.__applyOne(this)">
+      </div>
+    `;
+  }
+
+  function makeMealInput(key, label, value, ds){
+    if(key === "foodNotes") {
+      return `
+        <div style="grid-column:1/-1">
+          <label class="label">${label}</label>
+          <textarea class="input" oninput="window.__setMeal('${ds}','${key}', this.value)">${String(value??'').replace(/</g,'&lt;')}</textarea>
+        </div>
+      `;
+    }
+    return `
+      <div>
+        <label class="label">${label}</label>
+        <input class="input" value="${String(value??'').replace(/"/g,'&quot;')}"
+          oninput="window.__setMeal('${ds}','${key}', this.value)">
+      </div>
+    `;
+  }
+
+  function makeChecks(list, ds, day){
+    return list
+      .filter(lbl => !(lbl === "__CUSTOM_VITAMIN__" && !shouldShowCustomVitamin()))
+      .map(lbl => {
+        const checked = !!(day.checks && day.checks[lbl]);
+        const id = `chk_${ds}_${lbl.replace(/[^a-z0-9]+/gi,'_')}`;
+        return `
+          <label class="chk" for="${id}">
+            <input id="${id}" type="checkbox" ${checked ? "checked" : ""}
+              onchange="window.__setCheck('${ds}', ${JSON.stringify(lbl)}, this.checked)">
+            <span>${displayCheckLabel(lbl).replace(/</g,'&lt;')}</span>
+          </label>
+        `;
+      }).join("");
+  }
+
+  function renderRange(startISO, endISO){
+    // sync backfill toggle state
+    try{ backfillWeekly = !!qs("backfillWeekly").checked; }catch(e){}
+
+    const daysEl = qs("days");
+    daysEl.innerHTML = "";
+    if(!startISO || !endISO) return;
+
+    qs("rangePill").textContent = `${isoToAU(startISO)} → ${isoToAU(endISO)}`;
+
+    const dates = dateRange(startISO, endISO);
+    dates.forEach(ds => {
+      const day = ensureDay(ds);
+      if(typeof collapsedMap[ds] === 'undefined') { collapsedMap[ds] = true; saveCollapsed(); }
+      const card = document.createElement("div");
+      card.className = "card";
+      if(collapsedMap[ds]) card.classList.add("collapsed");
+
+      const dailyFields = VALUE_FIELDS.filter(f => f.freq === "daily");
+      const weeklyFields = VALUE_FIELDS.filter(f => f.freq === "weekly");
+
+      const dailyHtml = `<div class="grid">${dailyFields.map(f => makeValueInput(f, day.values[f.key], ds)).join("")}</div>`;
+
+      let weeklyHtml = "";
+      if(backfillWeekly || isWeeklyDay(ds, startISO)) {
+        weeklyHtml = `<hr><div class="grid">${weeklyFields.map(f => makeValueInput(f, day.values[f.key], ds)).join("")}</div>`;
+      } else {
+        const due = daysUntilNextWeekly(ds, startISO);
+        weeklyHtml = `<div class="small">Body measurements are weekly. Next due in <b>${due}</b> day(s).</div>`;
+      }
+
+      const mealsHtml = `<div class="grid">${MEALS_FIELDS.map(([k,l]) => makeMealInput(k,l, day.meals[k], ds)).join("")}</div>`;
+
+      const notesHtml = `<textarea class="input" oninput="window.__setNotes('${ds}', this.value)">${String(day.notes||'').replace(/</g,'&lt;')}</textarea>`;
+
+      card.innerHTML = `
+        <div class="row" style="justify-content:space-between; align-items:center">
+          <div class="date">${isoToAU(ds)}</div>
+          <div class="row" style="gap:8px; align-items:center">
+            <button class="btn secondary toggleBtn" onclick="window.__toggleDay('${ds}')">${collapsedMap[ds] ? 'Expand' : 'Collapse'}</button>
+            <button class="btn secondary" onclick="window.__clearDay('${ds}')">Clear this day</button>
+          </div>
+        </div>
+
+        <div class="dayBody">
+        <div class="section-title">Blood sugars (daily)</div>
+        ${dailyHtml}
+
+        <div class="section-title" style="margin-top:10px">Body measurements (weekly)</div>
+        ${weeklyHtml}
+
+        <hr>
+        <div class="section-title">Meals</div>
+        ${mealsHtml}
+
+        <hr>
+        <div class="section-title">Supplements / Exercise / Fasting</div>
+        ${GROUPS.map(g => `
+          <div class="section-title" style="margin-top:8px">${g.title}</div>
+          <div class="checkgrid">${makeChecks(g.items, ds, day)}</div>
+        `).join("")}
+
+        <div class="section-title" style="margin-top:10px">Notes</div>
+        ${notesHtml}
+        </div>
+      `;
+
+      daysEl.appendChild(card);
+    });
+
+    applyTargetsToInputs();
+    updateAverages(startISO, endISO);
+    saveModel();
+  }
+
+  window.__applyOne = function(){ try{ applyTargetsToInputs(); }catch(e){} };
+  window.__setVal = function(ds, key, val){ const d=ensureDay(ds); d.values[key]=val; saveModel(); updateAverages(qs("start").value, qs("end").value); };
+  window.__setMeal = function(ds, key, val){ const d=ensureDay(ds); d.meals[key]=val; saveModel(); };
+  window.__setCheck = function(ds, label, on){ const d=ensureDay(ds); d.checks[label]=!!on; saveModel(); };
+  window.__setNotes = function(ds, val){ const d=ensureDay(ds); d.notes=val; saveModel(); };
+
+  window.__clearDay = function(ds){
+    if(!confirm("Clear all data for " + isoToAU(ds) + "?")) return;
+    delete model.days[ds];
+    saveModel();
+    renderRange(qs("start").value, qs("end").value);
+  };
+
+  function clearAll(){
+    if(!confirm("This will permanently delete ALL saved data in this browser. Continue?")) return;
+    model = { days: {} };
+    saveModel();
+    qs("days").innerHTML = "";
+    updateAverages(qs("start").value, qs("end").value);
+  }
+
+  function exportCSV(){
+    const headers = ["Date"];
+    VALUE_FIELDS.forEach(f => headers.push(f.label));
+    MEALS_FIELDS.forEach(([k,l]) => headers.push(l));
+    CHECKS.forEach(c => headers.push(c));
+    if(shouldShowCustomVitamin()) headers.push(customVitLabel);
+    headers.push("Notes");
+
+    const rows = [];
+    rows.push(headers.map(escapeCSV).join(","));
+
+    const dates = Object.keys(model.days||{}).sort();
+    dates.forEach(ds => {
+      const day = ensureDay(ds);
+      const row = [];
+      row.push(isoToAU(ds));
+      VALUE_FIELDS.forEach(f => row.push(day.values[f.key] ?? ""));
+      MEALS_FIELDS.forEach(([k,l]) => row.push(day.meals[k] ?? ""));
+      CHECKS.forEach(lbl => row.push(day.checks && day.checks[lbl] ? "1" : ""));
+      if(shouldShowCustomVitamin()) row.push(day.checks && day.checks["__CUSTOM_VITAMIN__"] ? "1" : "");
+      row.push(day.notes ?? "");
+      rows.push(row.map(escapeCSV).join(","));
+    });
+
+    const blob = new Blob([rows.join("\n")], {type:"text/csv"});
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "blood_sugar_tracker.csv";
+    a.click();
+  }
+
+  function importCSVText(text){
+    const rows = parseCSV(text);
+    if(rows.length < 2) throw new Error("CSV appears empty");
+    const hdrRaw = rows[0].map(h => String(h ?? '').replace(/^\uFEFF/,'').trim());
+    const hdr = hdrRaw.map(h => h.toLowerCase());
+
+    const idxAny = (...names) => {
+      for(const nm of names){
+        const n = String(nm).toLowerCase();
+        let i = hdr.indexOf(n);
+        if(i >= 0) return i;
+      }
+      for(const nm of names){
+        const n = String(nm).toLowerCase();
+        let i = hdr.findIndex(h => h.includes(n));
+        if(i >= 0) return i;
+      }
+      return -1;
+    };
+
+    const iDate = idxAny("date");
+    if(iDate < 0) throw new Error("Missing Date column");
+
+    const valueCol = {};
+    VALUE_FIELDS.forEach(f => {
+      const j = idxAny(f.label, f.key);
+      if(j >= 0) valueCol[f.key] = j;
+    });
+
+    const mealCol = {};
+    MEALS_FIELDS.forEach(([k,l]) => {
+      const j = idxAny(l, k);
+      if(j >= 0) mealCol[k] = j;
+    });
+
+    const checkCol = {};
+    CHECKS.forEach(lbl => {
+      const j = idxAny(lbl);
+      if(j >= 0) checkCol[lbl] = j;
+    });
+
+    let customCol = -1;
+    if(customVitLabel) customCol = idxAny(customVitLabel, "custom vitamin");
+    else customCol = idxAny("custom vitamin");
+
+    const iNotes = idxAny("notes");
+
+    for(let r=1;r<rows.length;r++) {
+      const row = rows[r];
+      const ds = auToISO(row[iDate]);
+      if(!ds || !/^\d{4}-\d{2}-\d{2}$/.test(ds)) continue;
+      const day = ensureDay(ds);
+
+      Object.entries(valueCol).forEach(([k,j]) => { day.values[k] = row[j] ?? ""; });
+      Object.entries(mealCol).forEach(([k,j]) => { day.meals[k] = row[j] ?? ""; });
+
+      Object.entries(checkCol).forEach(([lbl,j]) => {
+        const v = String(row[j] ?? "").trim().toLowerCase();
+        day.checks[lbl] = (v === "1" || v === "true" || v === "yes" || v === "y" || v === "x" || v === "✓");
+      });
+
+      if(customCol >= 0) {
+        const v = String(row[customCol] ?? "").trim().toLowerCase();
+        day.checks["__CUSTOM_VITAMIN__"] = (v === "1" || v === "true" || v === "yes" || v === "y" || v === "x" || v === "✓");
+      }
+
+      if(iNotes >= 0) day.notes = row[iNotes] ?? "";
+    }
+
+    saveModel();
+
+    const keys = Object.keys(model.days||{}).sort();
+    if(keys.length){
+      qs("start").value = keys[0];
+      qs("end").value = keys[keys.length-1];
+      localStorage.setItem(STORE_KEY + "_range", JSON.stringify({start: keys[0], end: keys[keys.length-1]}));
+      renderRange(keys[0], keys[keys.length-1]);
+    }
+  }
+
+  function bindTargetsUI(){
+    const map = [
+      ["fbs","low","t_fbs_low"], ["fbs","high","t_fbs_high"],
+      ["pre","low","t_pre_low"], ["pre","high","t_pre_high"],
+      ["post","low","t_post_low"], ["post","high","t_post_high"],
+    ];
+    map.forEach(([k,side,id]) => {
+      const el = qs(id);
+      el.value = String(targets[k][side]);
+      el.addEventListener("input", () => {
+        const n = numOrNull(el.value);
+        if(n === null) return;
+        targets[k][side] = n;
+        saveTargets();
+        applyTargetsToInputs();
+        updateAverages(qs("start").value, qs("end").value);
+      });
+    });
+  }
+
+  function bindTopUI(){
+    try{
+      const last = JSON.parse(localStorage.getItem(STORE_KEY + "_range") || "null");
+      if(last && last.start) qs("start").value = last.start;
+      if(last && last.end) qs("end").value = last.end;
+    }catch(e){}
+
+    qs("buildBtn").addEventListener("click", () => {
+      const s = qs("start").value; const e = qs("end").value;
+      if(!s || !e) return alert("Pick start and end dates");
+      localStorage.setItem(STORE_KEY + "_range", JSON.stringify({start:s,end:e}));
+      renderRange(s,e);
+    });
+
+    qs("exportBtn").addEventListener("click", exportCSV);
+    qs("importBtn").addEventListener("click", () => qs("csvFile").click());
+    qs("clearAllBtn").addEventListener("click", clearAll);
+
+    qs("csvFile").addEventListener("change", async (e) => {
+      const f = e.target.files && e.target.files[0];
+      if(!f) return;
+      try{
+        const text = await f.text();
+        importCSVText(text);
+        alert("CSV imported ✅");
+      }catch(err){
+        console.error(err);
+        alert("Import failed: " + (err && err.message ? err.message : "unknown error"));
+      } finally {
+        e.target.value = "";
+      }
+    });
+
+    qs("customVitLabel").value = customVitLabel || "";
+    qs("customVitLabel").addEventListener("input", () => {
+      customVitLabel = String(qs("customVitLabel").value || "").trim();
+      localStorage.setItem(CUSTOM_VIT_KEY, customVitLabel);
+      if(qs("start").value && qs("end").value) renderRange(qs("start").value, qs("end").value);
+    });
+
+    qs("backfillWeekly").checked = !!backfillWeekly;
+    qs("backfillWeekly").addEventListener("change", () => {
+      backfillWeekly = !!qs("backfillWeekly").checked;
+      localStorage.setItem(BACKFILL_KEY, backfillWeekly ? "1" : "0");
+      if(qs("start").value && qs("end").value) renderRange(qs("start").value, qs("end").value);
+    });
+
+    if(qs("start").value && qs("end").value) renderRange(qs("start").value, qs("end").value);
+  }
+
+  bindTargetsUI();
+  bindTopUI();
+  updateAverages(qs("start").value, qs("end").value);
+
+  if('serviceWorker' in navigator){
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('service-worker.js').catch(()=>{});
+    });
+  }
+})();
+</script>
+</body>
+</html>
